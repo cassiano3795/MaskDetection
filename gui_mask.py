@@ -159,11 +159,11 @@ def predict():
         print("[INFO] classifying image...")
 
         preds = model.predict(roi)[0]
+        #print(preds)
+        #print(preds.argmax())
         label=labels[preds.argmax()]
 
-        (mask, withoutMask) = model.predict(roi)[0]
-		label = "Mask ON" if mask > withoutMask else "NO Mask"
-        
+
         if(label=='NO Mask'):
             image = cv2.rectangle(frame, start_point, end_point, (0,0,255), thickness)
             cv2.putText(image,label,(30,60),cv2.FONT_HERSHEY_SIMPLEX,2,(255,255,255),3)

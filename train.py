@@ -17,9 +17,6 @@ from tensorflow.keras.layers import Input
 from tensorflow.keras.models import Model
 from tensorflow.keras.models import load_model
 from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.applications.mobilenet_v2 import preprocess_input
-from tensorflow.keras.preprocessing.image import img_to_array
-from tensorflow.keras.preprocessing.image import load_img
 from tensorflow.keras.utils import to_categorical
 from sklearn.preprocessing import LabelBinarizer
 from sklearn.model_selection import train_test_split
@@ -45,9 +42,10 @@ args = vars(ap.parse_args())
 #-----------------------------------------------------------------------
 # initialize the initial learning rate, number of epochs to train for,
 # and batch size
-INIT_LR = 1e-4
+INIT_LR = 1e-3
 EPOCHS = 20
-BS = 32
+#BS = 16
+BS = 4
 # grab the list of images in our dataset directory, then initialize
 # the list of data (i.e., images) and class images
 print("[INFO] loading images...")
@@ -63,9 +61,9 @@ for imagePath in imagePaths:
 
 	# load the image, swap color channels, and resize it to be a fixed
 	# 224x224 pixels while ignoring aspect ratio
-	image = load_img(imagePath, target_size=(224, 224))
-	image = img_to_array(image)
-	image = preprocess_input(image)
+	image = cv2.imread(imagePath)
+	image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+	image = cv2.resize(image, (224, 224))
 
 	# update the data and labels lists, respectively
 	data.append(image)
@@ -74,7 +72,7 @@ for imagePath in imagePaths:
 
 # convert the data and labels to NumPy arrays while scaling the pixel
 # intensities to the range [0, 255]
-data = np.array(data, dtype="float32")
+data = np.array(data) / 255.0
 labels = np.array(labels)
 
 # perform one-hot encoding on the labels
@@ -93,12 +91,7 @@ print(labels)
 
 # initialize the training data augmentation object
 trainAug = ImageDataGenerator(
-	rotation_range=20,
-	zoom_range=0.15,
-	width_shift_range=0.2,
-	height_shift_range=0.2,
-	shear_range=0.15,
-	horizontal_flip=True,
+	rotation_range=15,
 	fill_mode="nearest")
 
 # load the VGG16 network, ensuring the head FC layer sets are left
@@ -109,15 +102,16 @@ baseModel = VGG16(weights="imagenet", include_top=False,
 # construct the head of the model that will be placed on top of the
 # the base model
 headModel = baseModel.output
-headModel = AveragePooling2D(pool_size=(7, 7))(headModel)
+headModel = AveragePooling2D(pool_size=(4, 4))(headModel)
 headModel = Flatten(name="flatten")(headModel)
-headModel = Dense(128, activation="relu")(headModel)
+headModel = Dense(64, activation="relu")(headModel)
 headModel = Dropout(0.5)(headModel)
 headModel = Dense(2, activation="softmax")(headModel)
 
 # place the head FC model on top of the base model (this will become
 # the actual model we will train)
 model = Model(inputs=baseModel.input, outputs=headModel)
+model = load_model("./mask_imagenet.h5")
 
 # loop over all layers in the base model and freeze them so they will
 # *not* be updated during the first training process
@@ -125,10 +119,15 @@ for layer in baseModel.layers:
 	layer.trainable = False
 
 
+
+#----------------------------------------------------------------------
+
+
+
 # compile our model
 print("[INFO] compiling model...")
 opt = Adam(lr=INIT_LR, decay=INIT_LR / EPOCHS)
-model.compile(loss="binary_crossentropy", optimizer=opt,
+model.compile(loss="categorical_crossentropy", optimizer=opt,
 	metrics=["accuracy"])
 
 # train the head of the network
@@ -140,6 +139,11 @@ H = model.fit(
  	validation_data=(testX, testY), 
 	validation_steps=len(testX) // BS,
 	epochs=EPOCHS)
+
+
+
+#-----------------------------------------------------------------------
+
 
 
 # plot the training loss and accuracy
@@ -155,6 +159,7 @@ plt.xlabel("Epoch #")
 plt.ylabel("Loss/Accuracy")
 plt.legend(loc="lower left")
 plt.savefig(args["plot"])
+
 
 
 # serialize the model to disk
