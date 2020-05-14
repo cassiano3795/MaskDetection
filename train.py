@@ -1,12 +1,3 @@
-'''
-PyPower Projects
-Mask Detection Using Machine Learning
-'''
-
-# USAGE
-# python train.py -d dataset -p plot.png -m model.h5
-
-# import the necessary packages
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from tensorflow.keras.applications import VGG16
 from tensorflow.keras.layers import AveragePooling2D
@@ -27,7 +18,6 @@ import argparse
 import cv2
 import os
 
-# construct the argument parser and parse the arguments
 ap = argparse.ArgumentParser()
 ap.add_argument("-d", "--dataset", required=True,
 	help="path to input dataset")
@@ -38,69 +28,45 @@ ap.add_argument("-m", "--model", type=str, default="mask_pypower.h5",
 args = vars(ap.parse_args())
 
 
-
-#-----------------------------------------------------------------------
-# initialize the initial learning rate, number of epochs to train for,
-# and batch size
 INIT_LR = 1e-3
-EPOCHS = 20
-#BS = 16
-BS = 4
-# grab the list of images in our dataset directory, then initialize
-# the list of data (i.e., images) and class images
-print("[INFO] loading images...")
+EPOCHS = 30
+BS = 16
+
 imagePaths = list(paths.list_images(args["dataset"]))
 data = []
 labels = []
 
 
-# loop over the image paths
 for imagePath in imagePaths:
-	# extract the class label from the filename
 	label = imagePath.split(os.path.sep)[-2]
 
-	# load the image, swap color channels, and resize it to be a fixed
-	# 224x224 pixels while ignoring aspect ratio
 	image = cv2.imread(imagePath)
 	image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 	image = cv2.resize(image, (224, 224))
 
-	# update the data and labels lists, respectively
 	data.append(image)
 	labels.append(label)
 
 
-# convert the data and labels to NumPy arrays while scaling the pixel
-# intensities to the range [0, 255]
 data = np.array(data) / 255.0
 labels = np.array(labels)
 
-# perform one-hot encoding on the labels
 lb = LabelBinarizer()
 labels = lb.fit_transform(labels)
 labels = to_categorical(labels)
-print(labels)
 
-# partition the data into training and testing splits using 80% of
-# the data for training and the remaining 20% for testing
 
 (trainX, testX, trainY, testY) = train_test_split(data, labels,
 	test_size=0.20, stratify=labels, random_state=42)
 
 
-
-# initialize the training data augmentation object
 trainAug = ImageDataGenerator(
 	rotation_range=15,
 	fill_mode="nearest")
 
-# load the VGG16 network, ensuring the head FC layer sets are left
-# off
 baseModel = VGG16(weights="imagenet", include_top=False,
 	input_tensor=Input(shape=(224, 224, 3)))
 
-# construct the head of the model that will be placed on top of the
-# the base model
 headModel = baseModel.output
 headModel = AveragePooling2D(pool_size=(4, 4))(headModel)
 headModel = Flatten(name="flatten")(headModel)
@@ -108,29 +74,18 @@ headModel = Dense(64, activation="relu")(headModel)
 headModel = Dropout(0.5)(headModel)
 headModel = Dense(2, activation="softmax")(headModel)
 
-# place the head FC model on top of the base model (this will become
-# the actual model we will train)
 model = Model(inputs=baseModel.input, outputs=headModel)
 model = load_model("./mask_imagenet.h5")
 
-# loop over all layers in the base model and freeze them so they will
-# *not* be updated during the first training process
 for layer in baseModel.layers:
 	layer.trainable = False
 
-
-
-#----------------------------------------------------------------------
-
-
-
-# compile our model
 print("[INFO] compiling model...")
 opt = Adam(lr=INIT_LR, decay=INIT_LR / EPOCHS)
 model.compile(loss="categorical_crossentropy", optimizer=opt,
 	metrics=["accuracy"])
 
-# train the head of the network
+
 print("[INFO] training head...")
 train_generator = trainAug.flow(trainX, trainY, batch_size=BS)
 H = model.fit(
@@ -142,11 +97,6 @@ H = model.fit(
 
 
 
-#-----------------------------------------------------------------------
-
-
-
-# plot the training loss and accuracy
 N = EPOCHS
 plt.style.use("ggplot")
 plt.figure()
@@ -161,7 +111,4 @@ plt.legend(loc="lower left")
 plt.savefig(args["plot"])
 
 
-
-# serialize the model to disk
-print("[INFO] saving ImageNet detector model...")
 model.save(args["model"], save_format="h5")

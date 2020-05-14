@@ -10,7 +10,7 @@
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal",
-            "args": ["-d=C:./dataset/", "-p=plot.png", "-m=testemodel.h5"]
+            "args": ["-d=./dataset", "-p=plot.png", "-m=testemodel.h5"]
         }
     ]
 }
